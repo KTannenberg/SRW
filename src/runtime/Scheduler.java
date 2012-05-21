@@ -16,21 +16,30 @@ public class Scheduler implements Runnable {
 	private final int maxChannels;
 	private int curChannel;
 	private int curWorker;
+	private int mainTable;
+	private int mainState;
 	
 	private Map<Integer, Channel> channels;
 	private Map<Integer, Worker> workers;
-	private Map<Integer, Integer> allocation;
 	
-	private Map<String, Table> tableset;
+	private Map<String, Table> tables;
 	private Map<String, Module> modules;
+	
+
+	private Map<Integer, String> htables;
+	private Map<Integer, String> hmodule;
 	
 	private ModuleLoader binloader;
 	private TableLoader tableloader;
 	
+	private Object anchor;
 
-	public Scheduler(int workers, int channels, String tables, String classes) {
+	public Scheduler(int workers, int channels, String tables, String classes, String mainTable, String mainState) {
 		maxWorkers = workers;
 		maxChannels = channels;
+		this.mainTable = mainTable.hashCode();
+		this.mainState = mainState.hashCode();
+		this.anchor = new Object();
 		
 		binloader = new ModuleLoader(classes, this.getClass().getClassLoader());
 		tableloader = new TableLoader(tables);
@@ -39,7 +48,25 @@ public class Scheduler implements Runnable {
 	@Override
 	public void run() {
 		while(running) {
+			for(Integer cursor : channels.keySet()) {
+				Channel channel = channels.get(cursor);
+				if(channel.hasEvents()) {
+					for(Integer cursor2 : workers.keySet()) {
+						Worker worker = workers.get(cursor2);
+						if(worker.isBinded()) {
+							worker.bind(channel);
+						}
+					}
+				}
+			}
 			
+			synchronized(anchor) {
+				try {
+					anchor.wait();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 	
@@ -49,7 +76,7 @@ public class Scheduler implements Runnable {
 	
 	public synchronized void createChannel() throws SchedulerException {
 		if(channels.size() < maxChannels) {
-			channels.put(curChannel, new Channel());
+			channels.put(curChannel, new Channel(anchor, mainTable, mainState, curChannel));
 			curChannel++;
 		} else {
 			throw new SchedulerException("SCHEDULER: No more channels available, destroy one of channels");
@@ -58,7 +85,10 @@ public class Scheduler implements Runnable {
 	
 	public synchronized void removeChannel(int chID) throws SchedulerException {
 		if(channels.containsKey(chID)) {
-			channels.remove(chID);
+			Channel channel = channels.remove(chID);
+			if(channel.wrID > -1) {
+				workers.get(channel.wrID).unbind();
+			}
 		} else {
 			throw new SchedulerException("SCHEDULER: Channel with ID " + chID + " not found");
 		}
@@ -66,7 +96,7 @@ public class Scheduler implements Runnable {
 	
 	public synchronized void createWorker() throws SchedulerException {
 		if(workers.size() < maxWorkers) {
-			workers.put(curWorker, new Worker());
+			workers.put(curWorker, new Worker(this, anchor, curWorker));
 			curWorker++;
 		} else {
 			throw new SchedulerException("SCHEDULER: No more workers available, destroy one of workers");
@@ -75,7 +105,10 @@ public class Scheduler implements Runnable {
 	
 	public synchronized void removeWorker(int wrID) throws SchedulerException {
 		if(workers.containsKey(wrID)) {
-			workers.remove(wrID);
+			Worker worker = workers.remove(wrID);
+			worker.unbind();
+			worker.stop();
+			worker.notify();
 		} else {
 			throw new SchedulerException("SCHEDULER: Worker with ID " + wrID + " not found");
 		}
@@ -99,8 +132,7 @@ public class Scheduler implements Runnable {
 		}
 	}
 	
-	public void loadModule(String name) throws SchedulerException {
-		if(modules.containsKey(name)) return;
+	public Module loadModule(String name) throws SchedulerException {
 		Module module = null;
 		try {
 			module = Module.class.cast(Class.forName(name, true, binloader));
@@ -109,11 +141,10 @@ public class Scheduler implements Runnable {
 		} catch (ClassCastException e) {
 			throw new SchedulerException("SCHEDULER: Error loading module " + name + " cannot cast to interface 'Module'");
 		}
-		modules.put(name, module);
+		return modules.put(name, module);
 	}
 	
-	public void loadTable(String name) throws SchedulerException {
-		if(tableset.containsKey(name)) return;
+	public Table loadTable(String name) throws SchedulerException {
 		Table table = null;
 		try {
 			table = tableloader.findTable(name);
@@ -122,6 +153,34 @@ public class Scheduler implements Runnable {
 		} catch (IOException e) {
 			throw new SchedulerException("SCHEDULER: Error loading table " + name + " no access to file");
 		}
-		tableset.put(name, table);
+		hmodule.putAll(table.hmodule);
+		htables.putAll(table.htables);
+		table.hmodule.clear();
+		table.htables.clear();
+		return tables.put(name, table);
+	}
+	
+	public Module getModule(int moduleID) throws SchedulerException {
+		if(modules.containsKey(moduleID)) {
+			return modules.get(moduleID);
+		} else {
+			return loadModule(getModuleName(moduleID));
+		}
+	}
+	
+	public Table getTable(int tableID) throws SchedulerException {
+		if(tables.containsKey(tableID)) {
+			return tables.get(tableID);
+		} else {
+			return loadTable(getTableName(tableID));
+		}
+	}
+	
+	public String getModuleName(int moduleID) {
+		return hmodule.get(moduleID);
+	}
+	
+	public String getTableName(int tableID) {
+		return htables.get(tableID);
 	}
 }
