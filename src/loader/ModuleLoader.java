@@ -6,16 +6,13 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class FileModuleLoader extends ClassLoader {
+public class ModuleLoader extends ClassLoader {
+	
+	private String binPath;
 
-	/**
-	 * classpath
-	 */
-	private String pathtobin;
-
-	public FileModuleLoader(String pathtobin, ClassLoader parent) {
+	public ModuleLoader(String binPath, ClassLoader parent) {
 		super(parent);
-		this.pathtobin = pathtobin;
+		this.binPath = binPath;
 	}
 	
 	@Override
@@ -24,8 +21,9 @@ public class FileModuleLoader extends ClassLoader {
 			/**
 			 * getting b-code from file and loading to runtime class
 			 */
-			byte b[] = fetchClassFromFS(pathtobin + className + ".class");
-			return defineClass(className, b, 0, b.length);
+			byte b[] = fetchClassFromFS(binPath + className + ".class");
+			Class<?> result = defineClass(className, b, 0, b.length);
+			return result;
 		} catch (FileNotFoundException ex) {
 			return super.findClass(className);
 		} catch (IOException ex) {

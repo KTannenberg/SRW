@@ -1,12 +1,14 @@
 package main;
 
+import java.io.File;
+
 public class Main {
 
 	/**
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		// TODO Auto-generated method stub
-
+		File file = new File("C:\\windows\\");
+		int n = 0;
 	}
 }
