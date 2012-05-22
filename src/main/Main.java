@@ -2,17 +2,10 @@ package main;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Arrays;
-
-import loader.Table;
-
-import org.yaml.snakeyaml.Yaml;
 
 import runtime.Scheduler;
 import runtime.SchedulerException;
@@ -239,7 +232,6 @@ public class Main {
                     }
                     break;
                 case 3237338:
-                    //event
                     sopln("MAIN: Creating an event");
                     if(parts.length == 3 && parts[1].matches("\\d+")) {
                         int cnum = Integer.parseInt(parts[1]);
@@ -254,7 +246,6 @@ public class Main {
                     }
                     break;
                 case 3237337:
-                    //data
                     sopln("MAIN: Inputing a data");
                     if(parts.length > 3 && parts[1].matches("\\d+")) {
                         int cnum = Integer.parseInt(parts[1]);
