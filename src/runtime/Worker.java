@@ -12,9 +12,6 @@ public class Worker implements Runnable {
     private Object anchor;
     private Scheduler scheduler;
 
-    /*
-     * self-anchoring now
-     */
     private volatile boolean running;
 
     public Worker(Scheduler scheduler, Object anchor, int wrID) {
@@ -65,6 +62,7 @@ public class Worker implements Runnable {
                     }
 
                     int[] element = table.htable[eventIndex][stateIndex];
+                    
                     module = scheduler.getModule(element[2]);
                     for (String dataName : module.data()) {
                         if (channel.getData(dataName) == null)
@@ -75,11 +73,19 @@ public class Worker implements Runnable {
                                     + channel.chID + "'");
                     }
                     for (Integer codeID : module.code().keySet()) {
-                        /*
-                         * if() блаблабла
-                         */
+                        if (table.eventIndex(codeID) == -1) {
+                            throw new SchedulerException("Return code '"
+                                    + module.code().get(codeID) + "' ("
+                                    + codeID + ") isn't presented in table '"
+                                    + table.name);
+                        }
                     }
-                    int result = module.run();
+                    int result = module.run(channel);
+                    if(result < 0) {
+                        throw new SchedulerException(module.code().get(result));
+                    } else if(result > 0) {
+                        channel.createEvent(module.code().get(result));
+                    }
                 } catch (SchedulerException e) {
                     e.printStackTrace();
                     System.out.println(e.getMessage());
