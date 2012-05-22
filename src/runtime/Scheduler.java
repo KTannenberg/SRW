@@ -2,6 +2,7 @@ package runtime;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import loader.ModuleLoader;
@@ -31,52 +32,63 @@ public class Scheduler implements Runnable {
     private ModuleLoader binloader;
     private TableLoader tableloader;
 
-    private Object anchor;
-
     public Scheduler(int workers, int channels, String tables, String classes,
             String mainTable, String mainState) {
         maxWorkers = workers;
         maxChannels = channels;
         this.mainTable = mainTable.hashCode();
         this.mainState = mainState.hashCode();
-        this.anchor = new Object();
-
+    
         binloader = new ModuleLoader(classes, this.getClass().getClassLoader());
         tableloader = new TableLoader(tables);
+        
+        this.channels = new HashMap<Integer, Channel>(); 
+        this.workers = new HashMap<Integer, Worker>();
+        this.tables = new HashMap<String, Table>();
+        this.modules = new HashMap<String, Module>();
+        this.htables = new HashMap<Integer, String>();
+        this.hmodule = new HashMap<Integer, String>();
+        
+        htables.put(mainTable.hashCode(), mainTable);
     }
 
     @Override
     public void run() {
+        running = true;
         while (running) {
             for (Integer cursor : channels.keySet()) {
                 Channel channel = channels.get(cursor);
                 if (channel.hasEvents()) {
                     for (Integer cursor2 : workers.keySet()) {
                         Worker worker = workers.get(cursor2);
-                        if (worker.isBinded()) {
+                        if (!worker.isBinded()) {
                             worker.bind(channel);
                         }
                     }
                 }
             }
-
-            synchronized (anchor) {
-                try {
-                    anchor.wait();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             }
         }
     }
 
     public void stop() {
+        for(Worker worker : workers.values()) {
+            worker.unbind();
+            worker.stop();
+        }
+        workers.clear();
+        channels.clear();
         running = false;
     }
 
     public synchronized void createChannel() throws SchedulerException {
         if (channels.size() < maxChannels) {
-            channels.put(curChannel, new Channel(anchor, mainTable, mainState,
+            channels.put(curChannel, new Channel(this, mainTable, mainState,
                     curChannel));
             curChannel++;
         } else {
@@ -99,8 +111,10 @@ public class Scheduler implements Runnable {
 
     public synchronized void createWorker() throws SchedulerException {
         if (workers.size() < maxWorkers) {
-            workers.put(curWorker, new Worker(this, anchor, curWorker));
+            Worker worker = new Worker(this, curWorker);
+            workers.put(curWorker, worker);
             curWorker++;
+            new Thread(worker).start();
         } else {
             throw new SchedulerException(
                     "SCHEDULER: No more workers available, destroy one of workers");
@@ -112,7 +126,6 @@ public class Scheduler implements Runnable {
             Worker worker = workers.remove(wrID);
             worker.unbind();
             worker.stop();
-            worker.notify();
         } else {
             throw new SchedulerException("SCHEDULER: Worker with ID " + wrID
                     + " not found");
@@ -122,9 +135,12 @@ public class Scheduler implements Runnable {
     public void inputData(int chID, String name, Object data, String event)
             throws SchedulerException {
         if (channels.containsKey(chID)) {
-            if (event.equals("null"))
-                event = null;
-            channels.get(chID).inputData(name, data, event);
+            if(channels.get(chID).wrID != -1) {
+                throw new SchedulerException("SCHEDULER: Channel with ID " + chID
+                        + " is in use, cannot add data to it now");
+            } else {
+                channels.get(chID).inputData(name, data, event);
+            }
         } else {
             throw new SchedulerException("SCHEDULER: Channel with ID " + chID
                     + " not found");
@@ -133,8 +149,6 @@ public class Scheduler implements Runnable {
 
     public void createEvent(int chID, String event) throws SchedulerException {
         if (channels.containsKey(chID)) {
-            if (event.equals("null"))
-                event = null;
             channels.get(chID).createEvent(event);
         } else {
             throw new SchedulerException("SCHEDULER: Channel with ID " + chID
@@ -145,13 +159,21 @@ public class Scheduler implements Runnable {
     public Module loadModule(String name) throws SchedulerException {
         Module module = null;
         try {
-            module = Module.class.cast(Class.forName(name, true, binloader));
+            ///
+            Object modu = Class.forName(name, true, binloader).newInstance();
+            module = Module.class.cast(modu);
         } catch (ClassNotFoundException e) {
             throw new SchedulerException("SCHEDULER: Error loading module "
                     + name + " class not found");
         } catch (ClassCastException e) {
             throw new SchedulerException("SCHEDULER: Error loading module "
                     + name + " cannot cast to interface 'Module'");
+        } catch (InstantiationException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
         }
         return modules.put(name, module);
     }
@@ -175,18 +197,20 @@ public class Scheduler implements Runnable {
     }
 
     public Module getModule(int moduleID) throws SchedulerException {
-        if (modules.containsKey(moduleID)) {
-            return modules.get(moduleID);
+        String name = getModuleName(moduleID);
+        if (modules.containsKey(name)) {
+            return modules.get(name);
         } else {
-            return loadModule(getModuleName(moduleID));
+            return loadModule(name);
         }
     }
 
     public Table getTable(int tableID) throws SchedulerException {
-        if (tables.containsKey(tableID)) {
-            return tables.get(tableID);
+        String name = getTableName(tableID);
+        if (tables.containsKey(name)) {
+            return tables.get(name);
         } else {
-            return loadTable(getTableName(tableID));
+            return loadTable(name);
         }
     }
 
@@ -196,5 +220,18 @@ public class Scheduler implements Runnable {
 
     public String getTableName(int tableID) {
         return htables.get(tableID);
+    }
+    
+    public String getState() {
+        String state = "Workers: " + workers.size() + "/" + maxWorkers + "\n" + "Channels: " + channels.size() + "/" + maxChannels + "\n";
+        String wrkrs = "";
+        for(Worker worker : workers.values()) {
+            wrkrs += "Worker " + worker.wrID + " is working: " + worker.isBinded() + "\n";
+        }
+        String chnnls = "";
+        for(Channel channel : channels.values()) {
+            chnnls += "Channels " + channel.chID + " is processed by " + channel.wrID + ", have events: " + channel.hasEvents() + "\n";
+        }
+        return state + wrkrs + chnnls;
     }
 }

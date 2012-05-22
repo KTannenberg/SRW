@@ -20,23 +20,6 @@ public class Table {
 
     public void setTable(String[][] table) {
         this.table = table;
-        hmodule = new HashMap<Integer, String>();
-        htables = new HashMap<Integer, String>();
-        try {
-            htable = new int[table.length][table[0].length][3];
-            for (int n = 0; n < htable.length; n++) {
-                for (int m = 0; m < htable[0].length; m++) {
-                    String[] parts = table[n][m].split(" ");
-                    htables.put(parts[0].hashCode(), parts[0]);
-                    hmodule.put(parts[2].hashCode(), parts[2]);
-                    htable[n][m][0] = parts[0].hashCode();
-                    htable[n][m][1] = parts[1].hashCode();
-                    htable[n][m][2] = parts[2].hashCode();
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     public void setStates(String[] states) {
@@ -61,5 +44,25 @@ public class Table {
                 return n;
         }
         return -1;
+    }
+    
+    public void init() {
+        hmodule = new HashMap<Integer, String>();
+        htables = new HashMap<Integer, String>();
+        try {
+            htable = new int[table.length][table[0].length][3];
+            for (int n = 0; n < htable.length; n++) {
+                for (int m = 0; m < htable[0].length; m++) {
+                    String[] parts = table[n][m].split(" ");
+                    htables.put(parts[0].hashCode(), parts[0]);
+                    hmodule.put(parts[2].hashCode(), parts[2]);
+                    htable[n][m][0] = parts[0].hashCode();
+                    htable[n][m][1] = parts[1].hashCode();
+                    htable[n][m][2] = parts[2].hashCode();
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

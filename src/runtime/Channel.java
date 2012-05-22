@@ -6,17 +6,17 @@ import java.util.LinkedList;
 import java.util.Map;
 
 public class Channel {
-    private Map<String, Object> storage;
-    private Deque<String> events;
+    protected Map<String, Object> storage;
+    protected Deque<String> events;
     public volatile int wrID;
     public int chID;
-    private Object anchor;
 
-    private volatile int table;
-    private volatile int state;
+    protected volatile int table;
+    protected volatile int state;
+    private Scheduler scheduler;
 
-    public Channel(Object anchor, Integer mainTable, Integer mainState, int chID) {
-        this.anchor = anchor;
+    public Channel(Scheduler scheduler, Integer mainTable, Integer mainState, int chID) {
+        this.scheduler = scheduler;
         wrID = -1;
         this.chID = chID;
         storage = new HashMap<String, Object>();
@@ -45,8 +45,8 @@ public class Channel {
     }
 
     public synchronized void createEvent(String event) {
+        if(event == null) return;
         events.addLast(event);
-        anchor.notify();
     }
 
     public synchronized String retrieveEvent() {

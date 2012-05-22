@@ -21,7 +21,7 @@ public class ModuleLoader extends ClassLoader {
             /**
              * getting b-code from file and loading to runtime class
              */
-            byte b[] = fetchClassFromFS(binPath + className + ".class");
+            byte b[] = fetchClassFromFS(binPath + "\\" + className + ".class");
             Class<?> result = defineClass(className, b, 0, b.length);
             return result;
         } catch (FileNotFoundException ex) {

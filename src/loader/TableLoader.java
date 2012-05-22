@@ -20,7 +20,7 @@ public class TableLoader {
             IOException {
         InputStream stream = null;
         try {
-            stream = new FileInputStream(tablePath + "\\" + tableName);
+            stream = new FileInputStream(tablePath + "\\" + tableName + ".table");
         } catch (FileNotFoundException ex) {
             throw new FileNotFoundException("File with table " + tableName
                     + " not found");
@@ -29,6 +29,7 @@ public class TableLoader {
         Table table;
         try {
             table = (Table) yaml.load(stream);
+            table.init();
         } catch (Exception ex) {
             throw new IOException("Error while reading file " + tableName);
         }
